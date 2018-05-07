@@ -1,0 +1,212 @@
+<!doctype html>
+<html>
+<head>
+	<title>snake</title>
+	<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+	<style type="text/css">
+		canvas{
+			background-color:black;
+		}
+	</style>
+</head>
+<body onload="start()">
+	<canvas id="canvas" width="500" height="500"></canvas>
+	<script type="text/javascript" >
+		/*
+		分步实现贪吃蛇项目
+		1.随机位置生成一个小方块，在屏幕上移动起来
+		2.监听键盘上的方向键，改变方块的运动方向（键盘上的键值 ←↑→↓ 分别对应37,38,39,40）
+		3.随机位置刷出异色块;如果控件与异色块重合则异色块消失
+		4.使控件按照贪吃蛇的样式增长(将控件元素装进数组，反复图画整个数组,增长方式暂时设定和自动移动时间一致自动增长)
+		5.合并移动方法，加入吃异色块增长自身的逻辑
+		#mark(判断吃到异色块的支持方法,不用遍历数组的话可以考虑更优思路ctx.isPointInPath(x,y))
+		6.优化和修改bug
+			Q：快速按下，三个不同的方向键导致掉头吃到自己
+			A：尝试使用三个元素的数组保存临近的三次操作方向和时间，如果1和3次间隔相差小于0.5秒则作废第三次操作同时不保存第三个元素
+		*/
+		//变量=======================================
+		var x = 50;	//初始化头部横坐标
+		var y = 50; //纵坐标
+		var edge = 25;//单元格长
+		var pace = 500;//控件自动移动的时间间隔
+		var time;	//控件计时器
+		var born;	//刷新计时器
+		var keynum = 40;//初始向下
+		var arr = new Array();	//控件数组
+		var blockArray = new Array();	//异色块数组
+		var debugArray = new Array(); //防止三连按
+	
+		//控件数组增长,需要追加朝向的判定==========================================
+		function generatePoint(){
+			//第一次吃到和不是第一次吃到不同生长策略
+			if(arr.length==1){
+				var point = {"x":x,"y":y};
+				 arr.push(point);
+			}else{//倒数两个元素的坐标做差(如果x2-x1是正表明末尾趋势向右边，所以应该生成在左边)
+				var x_dirc = arr[arr.length-2].x - arr[arr.length-1].x;
+				var y_dirc = arr[arr.length-2].y - arr[arr.length-1].y;
+				if(x_dirc>0){//往左边生长
+					var leftPoint = {"x":arr[arr.length-1].x-edge,"y":arr[arr.length-1].y};
+					arr.push(leftPoint);
+				}
+				if(x_dirc<0){//往右边生长
+					var rightPoint = {"x":arr[arr.length-1].x+edge,"y":arr[arr.length-1].y};
+					arr.push(rightPoint);
+				}
+				if(y_dirc>0){//往上面生长
+					var upPoint = {"x":arr[arr.length-1].x,"y":arr[arr.length-1].y-edge};
+					arr.push(upPoint);
+				}
+				if(y_dirc<0){//往下面生长
+					var downPoint = {"x":arr[arr.length-1].x,"y":arr[arr.length-1].y+edge};
+					arr.push(downPoint);
+				}
+			}
+		}
+		
+		//刷新异色块========================================
+		function refresh(){
+			var canvas = document.getElementById("canvas");
+			var ctx = canvas.getContext("2d");
+			ctx.fillStyle = "yellow";
+			x_dif = x + Math.ceil(Math.random()*10)*25;
+			y_dif = y + Math.ceil(Math.random()*10)*25;
+			//考虑异色块位置不能刷在控件数组出现的位置上
+			for(point in arr){
+				if(point.x == x_dif || point.y == y_dif){
+					refresh();
+				}
+			}
+			ctx.fillRect(x_dif,y_dif,edge,edge);
+			var blockPoint = {"x":x_dif,"y":y_dif};
+			blockArray.push(blockPoint);
+			born = setTimeout("refresh()",2000);
+			return;//刷出合理位置退出整个方法
+		}
+		//游戏结束的判定===================================
+		function gameOver(){
+			if(x==pace || y==pace || (x==0 && y<0) || (y==0 && x<0)){
+				return true;
+			}
+			for(i=3;i<arr.length;i++){
+				if(arr[i].x == arr[0].x && arr[i].y == arr[0].y){
+					return true;
+				}
+			}
+			return false;
+		}
+		//debug方法=============================================
+		function debug(keyHandler){
+			console.log("0");
+			console.log(keyHandler);
+			console.log(debugArray[0],debugArray[1],debugArray[2]);
+			if(debugArray.length < 2){//数组只保留3个元素
+				debugArray.push(keyHandler);
+				keynum = keyHandler.keynum;
+				return;
+			}
+			//三次规则允许的按键，按键的时间间隔小于500毫秒，会出现三连按掉头bug
+			if(debugArray.length == 2 && (keyHandler.time - debugArray[1].time) > 500){
+				debugArray.push(keyHandler);
+				keynum = keyHandler.keynum;
+				return;
+			}
+			if(debugArray.length == 2 
+					&& (keyHandler.time - debugArray[1].time) <= 500 
+					&& (keyHandler.keynum - debugArray[0].keynum)%2 !=0)
+			{
+				debugArray.push(keyHandler);
+				keynum = keyHandler.keynum;
+				return;
+			}
+			if(debugArray.length > 2 && (keyHandler.time - debugArray[2].time) > 500){
+				debugArray.splice(0,1);
+				debugArray.push(keyHandler);
+				keynum = keyHandler.keynum;
+				return;
+			}
+			if(debugArray.length > 2 
+					&& (keyHandler.time - debugArray[2].time) <= 500
+					&& (keyHandler.keynum - debugArray[1].keynum) ==0)
+			{
+				debugArray.splice(0,1);
+				debugArray.push(keyHandler);
+				keynum = keyHandler.keynum;
+				return;
+			}
+		}
+		//核心逻辑===================================================
+		function draw(){
+			var canvas = document.getElementById("canvas");			
+			var ctx = canvas.getContext("2d");
+			//清除上一次的控件数组画面
+			if(x >= 0 && x < pace && y >= 0 && y < pace){
+				for(i=1;i<=arr.length;i++){
+					ctx.clearRect(arr[i-1].x,arr[i-1].y,edge,edge);
+				}
+			}
+			//检查当前头部有没有吃到异色块
+			for(i=0;i<blockArray.length;i++){
+				if(blockArray[i].x == x && blockArray[i].y == y){
+					//吃到,获取控件组最后一个元素坐标,在其后面增加一节
+					generatePoint();
+					//同时在异色块数组中删除这个异色块
+					blockArray.splice(i,1);
+				}
+			}
+			//除了头部，数组每一个元素都移动到之前一个元素的位置
+			for(i=1;i<arr.length;i++){
+				arr[arr.length-i].x = arr[arr.length-i-1].x
+				arr[arr.length-i].y = arr[arr.length-i-1].y
+				ctx.fillStyle = "rgb(0,200,0)";
+				ctx.fillRect(arr[arr.length-i].x,arr[arr.length-i].y,edge,edge);	
+			}
+			switch(keynum){
+			case 37:
+				arr[0].x -= edge;
+				break;
+			case 38:
+				arr[0].y -= edge;
+				break;
+			case 39:
+				arr[0].x += edge;
+				break;
+			case 40:
+				arr[0].y += edge;
+				break;
+			}
+			ctx.fillStyle = "rgb(0,200,0)";
+			ctx.fillRect(arr[0].x,arr[0].y,edge,edge);	
+			//更新头部信息
+			x = arr[0].x;
+			y = arr[0].y;
+			//监听方向键
+			document.onkeydown = function(e){
+				//针对不同浏览器，针对同方向按下多次只执行一次，针对正反向不能掉头的判断
+				var keyHandler = {"keynum":e.keyCode,"time":new Date().getTime()};
+				if(window.event && keynum != e.keyCode && ((keynum-e.keyCode)%2!=0) && e.keyCode>36 && e.keyCode<41){ // IE
+					debug(keyHandler);
+				}else if(e.which && keynum != e.keyCode && ((keynum-e.keyCode)%2!=0) && e.keyCode>36 && e.keyCode<41){ // Netscape/Firefox/Opera
+					debug(keyHandler);
+				}
+			}
+			//游戏结束的判定
+			if(gameOver()){
+				clearTimeout(time);
+				clearTimeout(born);
+			}else{
+				time = setTimeout("draw()",pace);
+			}	
+		}
+		//加载页面=======================================
+		function start(){
+			var orgPoint = {"x":x,"y":y};
+			arr.push(orgPoint);
+			var orgHandler = {"keynum":keynum,"time":new Date().getTime()};
+			debugArray.push(orgHandler);
+			refresh();
+			draw();
+		}
+	</script>
+</body>
+</html>
